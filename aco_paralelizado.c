@@ -3,6 +3,7 @@
 #include <math.h>
 #include <time.h>
 #include <omp.h>
+#include <sys/time.h>
 
 #define MAX_IT 1000
 #define MAX_VERTICES 200
@@ -55,6 +56,15 @@ float probabilidade_caminho(int grafo[MAX_VERTICES][MAX_VERTICES], int origem, i
     return prob;
 }
 
+double getTimestamp()
+{
+    struct timeval tv;
+
+    gettimeofday(&tv, NULL);
+
+    return tv.tv_sec + tv.tv_usec / 1000000.0;
+}
+
 int main(){
     srand((unsigned)time(NULL));
 
@@ -70,9 +80,12 @@ int main(){
     // iniciaciza formiga
     setFormigas(formigas);
 
+    FILE *arquivoSaida = fopen("iteracoes.csv", "w");
+    fprintf(arquivoSaida, "threads,matriz,tempo_total,inicio,fim\n");
+
     // inicializa feromonio
 
-int tamanhos[] = {10, 50, 100, 200};
+int tamanhos[] = {50, 100, 150, 200};
 int qtd_tamanhos = 4;
 
 for (int g = 0; g < qtd_tamanhos; g++) {
@@ -92,6 +105,7 @@ for (int g = 0; g < qtd_tamanhos; g++) {
 
 for (int teste = 1; teste < 13; teste++){
     omp_set_num_threads(teste);
+    double temp_inicio = getTimestamp();
 
     for (int i = 0; i < MAX_VERTICES; i++) {
         for (int j = 0; j < MAX_VERTICES; j++) {
@@ -222,9 +236,13 @@ for (int teste = 1; teste < 13; teste++){
 
     }
     
+
+    double temp_fim = getTimestamp();
     double fim = omp_get_wtime();
 
-    printf("Matriz: %d Numero de Threads: %2d | Tempo: %.6f segundos\n", tamanhos[g] ,teste, fim - inicio);
+    //threads,matriz,tempo_total,inicio,fim
+    fprintf(arquivoSaida,"%d,%dx%d,%.6f,%.6f,%.6f\n",teste,tamanhos[g],tamanhos[g],fim-inicio,temp_inicio,temp_fim);
+    printf("Matriz: %d Numero de Threads: %2d | Tempo: %.6f segundos | Inicio : %.6f \n", tamanhos[g] ,teste, fim - inicio, inicio);
 }
 }
 
@@ -233,5 +251,6 @@ for (int i = 0; i < MAX_VERTICES; i++) {
     free(formigas[i]->visitados);
     free(formigas[i]);
 }
+    fclose(arquivoSaida);
     return 0;
 }
