@@ -78,179 +78,184 @@ int main(){
     Formiga *formigas[MAX_VERTICES];
 
     // iniciaciza formiga
-    setFormigas(formigas);
-
+    
     FILE *arquivoSaida = fopen("iteracoes.csv", "w");
-    fprintf(arquivoSaida, "threads,matriz,tempo_total,inicio,fim\n");
-
+    fprintf(arquivoSaida, "amostragem,threads,matriz,num_formigas,num_iteracoes,num_vertices_percorrido,tempo_total,inicio,fim\n");
+    
     // inicializa feromonio
+    
+    // tirar amostragens
+    for(int amostragem = 0; amostragem < 5; amostragem++){
+        int tamanhos[] = {50, 100, 150, 200};
+        int qtd_tamanhos = 4;
+        setFormigas(formigas);
+        
+        for (int g = 0; g < qtd_tamanhos; g++) {
+            int NUM_VERTICES = tamanhos[g];
 
-int tamanhos[] = {50, 100, 150, 200};
-int qtd_tamanhos = 4;
+            char nomeArquivo[100];
 
-for (int g = 0; g < qtd_tamanhos; g++) {
-    int NUM_VERTICES = tamanhos[g];
+            sprintf(
+                nomeArquivo,
+                "grafo_%d.txt",
+                NUM_VERTICES
+            );
 
-   char nomeArquivo[100];
+            if (!carregarGrafo(nomeArquivo, grafo, tamanhos[g])) {
+                return 1;
+            }
 
-    sprintf(
-        nomeArquivo,
-        "grafo_%d.txt",
-        NUM_VERTICES
-    );
+        for (int num_threads = 1; num_threads < 13; num_threads++){
+            omp_set_num_threads(num_threads);
+            double temp_inicio = getTimestamp();
 
-    if (!carregarGrafo(nomeArquivo, grafo, tamanhos[g])) {
-        return 1;
-    }
+            for (int i = 0; i < MAX_VERTICES; i++) {
+                for (int j = 0; j < MAX_VERTICES; j++) {
+                    feromonio[i][j] = 1.0f;
+                }
+            }
 
-for (int teste = 1; teste < 13; teste++){
-    omp_set_num_threads(teste);
-    double temp_inicio = getTimestamp();
+            double inicio = omp_get_wtime();
+            // inicia iterações
+            for( int it = 0; it < MAX_IT ; it++ ){
 
-    for (int i = 0; i < MAX_VERTICES; i++) {
-        for (int j = 0; j < MAX_VERTICES; j++) {
-            feromonio[i][j] = 1.0f;
-        }
-    }
-
-    double inicio = omp_get_wtime();
-    // inicia iterações
-    for( int it = 0; it < MAX_IT ; it++ ){
-
-        #pragma omp parallel
-        {
-            unsigned int seed = (unsigned int)time(NULL) ^ omp_get_thread_num();
-            // loop formigas
-            #pragma omp for
-            for (int i = 0; i < NUM_VERTICES ; i++){
-                Formiga *f = formigas[i];
-                    // Loop caminho
-                    for (int passo = 1; passo < NUM_VERTICES; passo++) {
-                        float pesos[NUM_VERTICES];
-                        float soma = 0;
-                        int origem = f->caminho[passo - 1];
-                        
-                        // calcula peso (tij^alfa * 1/d^beta) e total para formula (somatorio dos pesos)
-                        #pragma omp simd reduction(+:soma)
-                        for (int j = 0; j < NUM_VERTICES; j++){
-                            if(!f->visitados[j]){
-                                pesos[j] = probabilidade_caminho(grafo, origem, j, feromonio, alfa, beta);
+                #pragma omp parallel
+                {
+                    unsigned int seed = (unsigned int)time(NULL) ^ omp_get_thread_num();
+                    // loop formigas
+                    #pragma omp for
+                    for (int i = 0; i < NUM_VERTICES ; i++){
+                        Formiga *f = formigas[i];
+                        // Loop caminho
+                        for (int passo = 1; passo < NUM_VERTICES; passo++) {
+                            float pesos[NUM_VERTICES];
+                            float soma = 0;
+                            int origem = f->caminho[passo - 1];
+                            
+                            // calcula peso (tij^alfa * 1/d^beta) e total para formula (somatorio dos pesos)
+                            #pragma omp simd reduction(+:soma)
+                            for (int j = 0; j < NUM_VERTICES; j++){
+                                if(!f->visitados[j]){
+                                    pesos[j] = probabilidade_caminho(grafo, origem, j, feromonio, alfa, beta);
+                                }
+                                else{
+                                    pesos[j] = 0;
+                                }
+                                soma += pesos[j];
                             }
-                            else{
-                                pesos[j] = 0;
-                            }
-                            soma += pesos[j];
-                        }
-    
-                        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-                        float r = (float)seed / (float)0x7fffffff;
-                        float acumulado = 0.0f;
-                        int proximo_vertice = -1;
-                        int ultimo_nao_visitado = -1;
-    
-                        // sorteia o proximo caminho
-                        for (int j = 0; j < NUM_VERTICES; j++) {
-    
-                            if (!f->visitados[j]) {
-    
-                                ultimo_nao_visitado = j;
-    
-                                float probabilidade = pesos[j] / soma;
-                                acumulado += probabilidade;
-    
-                                if (r <= acumulado) {
-                                    proximo_vertice = j;
-                                    break;
+            
+                            seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+                            float r = (float)seed / (float)0x7fffffff;
+                            float acumulado = 0.0f;
+                            int proximo_vertice = -1;
+                            int ultimo_nao_visitado = -1;
+            
+                            // sorteia o proximo caminho
+                            for (int j = 0; j < NUM_VERTICES; j++) {
+            
+                                if (!f->visitados[j]) {
+            
+                                    ultimo_nao_visitado = j;
+            
+                                    float probabilidade = pesos[j] / soma;
+                                    acumulado += probabilidade;
+            
+                                    if (r <= acumulado) {
+                                        proximo_vertice = j;
+                                        break;
+                                    }
                                 }
                             }
+            
+                            // caso o ultimo vertice seja sorteado, ou ocorra um erro, é atribuido
+                            if (proximo_vertice == -1) {
+                                proximo_vertice = ultimo_nao_visitado;
+                            }
+            
+                            // salva informaçao
+                            f->caminho[passo] = proximo_vertice;
+                            f->visitados[proximo_vertice] = 1;
+                            f->custo += grafo[origem][proximo_vertice];
                         }
-                        
-    
-                        // caso o ultimo vertice seja sorteado, ou ocorra um erro, é atribuido
-                        if (proximo_vertice == -1) {
-                            proximo_vertice = ultimo_nao_visitado;
-                        }
-    
-                        // salva informaçao
-                        f->caminho[passo] = proximo_vertice;
-                        f->visitados[proximo_vertice] = 1;
-                        f->custo += grafo[origem][proximo_vertice];
+            
+                        //voltando a origem
+                        int origem = f->caminho[NUM_VERTICES - 1];
+                        int destino = f->caminho[0];
+            
+                        f->custo += grafo[origem][destino];
+                    }
+
                 }
-    
-                //voltando a origem
-                int origem = f->caminho[NUM_VERTICES - 1];
-                int destino = f->caminho[0];
-    
-                f->custo += grafo[origem][destino];
-            }
 
-        }
+                // calcula melhor custo da iteracao
+                float pbest = formigas[0]->custo;
 
-        // calcula melhor custo da iteracao
-        float pbest = formigas[0]->custo;
+                #pragma omp parallel for reduction(min:pbest)
+                for (int i = 1; i < NUM_VERTICES; i++) {
+                    if (formigas[i]->custo < pbest) {
+                        pbest = formigas[i]->custo;
+                    }
+                }
 
-        #pragma omp parallel for reduction(min:pbest)
-        for (int i = 1; i < NUM_VERTICES; i++) {
-            if (formigas[i]->custo < pbest) {
-                pbest = formigas[i]->custo;
-            }
-        }
+                // atualiza decaimento antes de somar (evitar sobrepor decaimento por formiga, apenas uma vez por iteraçao)
+                #pragma omp parallel for collapse(2)
+                for (int i = 0; i < NUM_VERTICES; i++) {
+                    for (int j = 0; j < NUM_VERTICES; j++) {
+                        feromonio[i][j] *= (1.0f - decaimento);
+                    }
+                }
+                
+                // atualiza feromonio e reseta formiga
+                #pragma omp parallel for
+                for (int i = 0; i < NUM_VERTICES ; i++){    
+                    Formiga *f = formigas[i];    
 
-        // atualiza decaimento antes de somar (evitar sobrepor decaimento por formiga, apenas uma vez por iteraçao)
-        #pragma omp parallel for collapse(2)
-        for (int i = 0; i < NUM_VERTICES; i++) {
-            for (int j = 0; j < NUM_VERTICES; j++) {
-                feromonio[i][j] *= (1.0f - decaimento);
-            }
-        }
-        
-        // atualiza feromonio e reseta formiga
-        #pragma omp parallel for
-        for (int i = 0; i < NUM_VERTICES ; i++){    
-            Formiga *f = formigas[i];    
+                    //percorre caminho e atualiza feromonio
+                    for(int j = 0; j < (NUM_VERTICES - 1); j++){
+                        int origem = f->caminho[j];
+                        int destino = f->caminho[j+1];
 
-            //percorre caminho e atualiza feromonio
-            for(int j = 0; j < (NUM_VERTICES - 1); j++){
-                int origem = f->caminho[j];
-                int destino = f->caminho[j+1];
+                        #pragma omp atomic
+                        feromonio[origem][destino] += deposito/f->custo;
+                    }
+                    
+                    //deposita a volta
+                    int origem = f->caminho[NUM_VERTICES - 1];
+                    int destino = f->caminho[0]; 
 
-                #pragma omp atomic
-                feromonio[origem][destino] += deposito/f->custo;
+                    #pragma omp atomic
+                    feromonio[origem][destino] += deposito / f->custo;
+
+                    //reset
+                    for (int j = 0; j < NUM_VERTICES; j++) {
+                        f->visitados[j] = 0;
+                    }
+                    
+                    f->custo = 0.0f;
+                    f->caminho[0] = f->id;
+                    f->visitados[f->id] = 1;
+                }
+
             }
             
-            //deposita a volta
-            int origem = f->caminho[NUM_VERTICES - 1];
-            int destino = f->caminho[0]; 
 
-            #pragma omp atomic
-            feromonio[origem][destino] += deposito / f->custo;
+            double temp_fim = getTimestamp();
+            double fim = omp_get_wtime();
+            long long num_vertices_percorrido = (long long)tamanhos[g] * tamanhos[g] * MAX_IT;
 
-            //reset
-            for (int j = 0; j < NUM_VERTICES; j++) {
-                f->visitados[j] = 0;
+            //"amostragem,threads,matriz,num_formigas,num_iteracoes,num_vertices_percorrido,tempo_total,inicio,fim
+            fprintf(arquivoSaida,"%d,%d,%dx%d,%d,%d, %d,%.6f,%.6f,%.6f\n",amostragem,num_threads,tamanhos[g],tamanhos[g],tamanhos[g],MAX_IT,num_vertices_percorrido,fim-inicio,temp_inicio,temp_fim);
+            printf("Matriz: %d Numero de Threads: %2d | Tempo: %.6f segundos | Inicio : %.6f | Amostragem %d\n", tamanhos[g] ,num_threads, fim - inicio, inicio, amostragem);
             }
-            f->custo = 0.0f;
-            f->caminho[0] = f->id;
-            f->visitados[f->id] = 1;
         }
 
+        for (int i = 0; i < MAX_VERTICES; i++) {
+            free(formigas[i]->caminho);
+            free(formigas[i]->visitados);
+            free(formigas[i]);
+        }
     }
     
-
-    double temp_fim = getTimestamp();
-    double fim = omp_get_wtime();
-
-    //threads,matriz,tempo_total,inicio,fim
-    fprintf(arquivoSaida,"%d,%dx%d,%.6f,%.6f,%.6f\n",teste,tamanhos[g],tamanhos[g],fim-inicio,temp_inicio,temp_fim);
-    printf("Matriz: %d Numero de Threads: %2d | Tempo: %.6f segundos | Inicio : %.6f \n", tamanhos[g] ,teste, fim - inicio, inicio);
-}
-}
-
-for (int i = 0; i < MAX_VERTICES; i++) {
-    free(formigas[i]->caminho);
-    free(formigas[i]->visitados);
-    free(formigas[i]);
-}
     fclose(arquivoSaida);
     return 0;
 }
