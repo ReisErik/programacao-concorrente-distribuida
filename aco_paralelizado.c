@@ -4,6 +4,7 @@
 #include <time.h>
 #include <omp.h>
 #include <sys/time.h>
+#include <windows.h>
 
 #define MAX_IT 1000
 #define MAX_VERTICES 200
@@ -79,14 +80,14 @@ int main(){
 
     // iniciaciza formiga
     
-    FILE *arquivoSaida = fopen("iteracoes.csv", "w");
+    FILE *arquivoSaida = fopen("iteracoes_fast.csv", "w");
     fprintf(arquivoSaida, "amostragem,threads,matriz,num_formigas,num_iteracoes,num_vertices_percorrido,tempo_total,inicio,fim\n");
     
     // inicializa feromonio
     
     // tirar amostragens
     for(int amostragem = 0; amostragem < 5; amostragem++){
-        int tamanhos[] = {50, 100, 150, 200};
+        int tamanhos[] = {150, 100, 50, 200};
         int qtd_tamanhos = 4;
         setFormigas(formigas);
         
@@ -107,6 +108,7 @@ int main(){
 
         for (int num_threads = 1; num_threads < 13; num_threads++){
             omp_set_num_threads(num_threads);
+            Sleep(2000);
             double temp_inicio = getTimestamp();
 
             for (int i = 0; i < MAX_VERTICES; i++) {
@@ -133,7 +135,7 @@ int main(){
                             int origem = f->caminho[passo - 1];
                             
                             // calcula peso (tij^alfa * 1/d^beta) e total para formula (somatorio dos pesos)
-                            #pragma omp simd reduction(+:soma)
+                            #pragma omp simt reduction(+:soma)
                             for (int j = 0; j < NUM_VERTICES; j++){
                                 if(!f->visitados[j]){
                                     pesos[j] = probabilidade_caminho(grafo, origem, j, feromonio, alfa, beta);
