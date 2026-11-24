@@ -4,8 +4,7 @@
 #include <time.h>
 #include <mpi.h>
 #include <sys/time.h>
-#include <windows.h>
-
+#include <unistd.h>
 
 #define MAX_IT 1000
 #define MAX_VERTICES 200
@@ -112,7 +111,7 @@ int main(int argc, char **argv){
                 return 1;
             }
 
-            Sleep(2000);
+            sleep(2);
             double temp_inicio = getTimestamp();
 
             for (int i = 0; i < MAX_VERTICES; i++) {
@@ -282,5 +281,4 @@ int main(int argc, char **argv){
 
     MPI_Finalize();
     return 0;
-}
 }
